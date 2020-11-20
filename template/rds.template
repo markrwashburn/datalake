@@ -88,16 +88,8 @@ Resources:
     Type: 'AWS::RDS::DBCluster'
     Properties:
       DBClusterParameterGroupName: !Ref RDSDBClusterParameterGroup
-      MasterUsername: !Join
-        - ''
-        - - '{{resolve:secretsmanager:'
-          - !Ref RDSSecret
-          - ':SecretString:username}}'
-      MasterUserPassword: !Join
-        - ''
-        - - '{{resolve:secretsmanager:'
-          - !Ref RDSSecret
-          - ':SecretString:password}}'
+      MasterUsername: !Sub '{{resolve:secretsmanager:${RDSSecret}:SecretString:username}}'
+      MasterUsername: !Sub '{{resolve:secretsmanager:${RDSSecret}:SecretString:password}}'
       DatabaseName: !Ref DatabaseName
       BackupRetentionPeriod: !Ref BackupRetentionPeriod
       Engine: aurora-postgresql
