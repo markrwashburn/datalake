@@ -89,7 +89,7 @@ Resources:
     Properties:
       DBClusterParameterGroupName: !Ref RDSDBClusterParameterGroup
       MasterUsername: !Sub '{{resolve:secretsmanager:${RDSSecret}:SecretString:username}}'
-      MasterUsername: !Sub '{{resolve:secretsmanager:${RDSSecret}:SecretString:password}}'
+      MasterPassword: !Sub '{{resolve:secretsmanager:${RDSSecret}:SecretString:password}}'
       DatabaseName: !Ref DatabaseName
       BackupRetentionPeriod: !Ref BackupRetentionPeriod
       Engine: aurora-postgresql
