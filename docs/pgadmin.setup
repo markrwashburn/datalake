@@ -1,20 +1,28 @@
+Open Source management tool for Postgres. Outlined below are steps required to install PGAdmin on EC2 instance.
 
 Step #1: Install docker & compose
-sudo yum -y update
-sudo amazon-linux-extras install docker
-sudo service docker start
-sudo usermod -a -G docker ec2-user
-sudo chkconfig docker on
+  # Update core os.
+  sudo yum -y update
 
-sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
+  # Add docker service.
+  sudo amazon-linux-extras install docker
+  sudo service docker start
+  sudo usermod -a -G docker ec2-user
+  sudo chkconfig docker on
 
-docker-compose version
+  # Install docker composer.
+  sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
+  sudo chmod +x /usr/local/bin/docker-compose
 
-Step #2: SCP pgadmin.zip to ec2
-scp -i <key pair.pem> pgadmin.zip ec2-user@<host>:/home/ec2-user/
-unzip pgadmin.zip
+  # version docker-compose is working.
+  docker-compose version
 
-Step #3: Start PGAdmin docker container
-cd pgadmin
-bin/pgadmin.sh
+Step #2: Upload support/pgadmin.zip to EC2 instance.
+  scp -i <key pair.pem> pgadmin.zip ec2-user@<host>:/home/ec2-user/
+  unzip pgadmin.zip
+
+Step #3: Start PGAdmin docker container. Port 8080
+  cd pgadmin
+  bin/pgadmin.sh
+
+  # URL Link: http://<EC2-DNS-ADDRESS>:8080
