@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  DatabaseName:
+    Description: Name of the database
+    Type: String
+    Default: DataLake
+  Subnet1:
+    Description: Subnet 1 ID
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: subnet-090f84d2c70892dbc
+  Subnet1AZ:
+    Type: 'AWS::EC2::AvailabilityZone::Name'
+    Default: us-east-1a
+  Subnet2:
+    Description: Subnet 2 ID
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: subnet-0be36b07288d39ab3
+  Subnet2AZ:
+    Type: 'AWS::EC2::AvailabilityZone::Name'
+    Default: us-east-1b
+Resources:
+  RDSStack:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: ./rds.template
+      TimeoutInMinutes: 15
+      Parameters:
+        ParentStackName: !Ref 'AWS::StackName'
+        DatabaseName: !Ref DatabaseName
+        Subnet1: !Ref Subnet1
+        Subnet1AZ: !Ref Subnet1AZ
+        Subnet2: !Ref Subnet2
+        Subnet2AZ: !Ref Subnet2AZ
+  ZoneStack:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: ./zones.template
+      TimeoutInMinutes: 15
+      Parameters:
+        ParentStackName: !Ref 'AWS::StackName'
+        RawZoneBucketName: !Join
+          - '-'
+          - - raw
+            - !Select
+              - 0
+              - !Split
+                - '-'
+                - !Select
+                  - 2
+                  - !Split
+                    - /
+                    - !Ref 'AWS::StackId'
+        ConformedZoneBucketName: !Join
+          - '-'
+          - - conformed
+            - !Select
+              - 0
+              - !Split
+                - '-'
+                - !Select
+                  - 2
+                  - !Split
+                    - /
+                    - !Ref 'AWS::StackId'
+        PurposeZoneBucketName: !Join
+          - '-'
+          - - purpose
+            - !Select
+              - 0
+              - !Split
+                - '-'
+                - !Select
+                  - 2
+                  - !Split
+                    - /
+                    - !Ref 'AWS::StackId'
+        AuditLogBucketName: !Join
+          - '-'
+          - - auditlog
+            - !Select
+              - 0
+              - !Split
+                - '-'
+                - !Select
+                  - 2
+                  - !Split
+                    - /
+                    - !Ref 'AWS::StackId'
+  WorkFlowStack:
+    Type: 'AWS::CloudFormation::Stack'
+    DependsOn: ZoneStack
+    Properties:
+      TemplateURL: ./workflow.template
+      TimeoutInMinutes: 15
+      Parameters:
+        ParentStackName: !Ref 'AWS::StackName'
+        StateMachineName: DataLakeStateMachine

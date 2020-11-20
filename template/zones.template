@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  ParentStackName:
+    Type: String
+  RawZoneBucketName:
+    Type: String
+    Default: raw
+  ConformedZoneBucketName:
+    Type: String
+    Default: conformed
+  PurposeZoneBucketName:
+    Type: String
+    Default: purpose
+  AuditLogBucketName:
+    Type: String
+    Default: cloudtrail
+Resources:
+  RawZoneBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Ref RawZoneBucketName
+  ConformedZoneBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Ref ConformedZoneBucketName
+  PurposeZoneBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Ref PurposeZoneBucketName
+  AuditLogBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Ref AuditLogBucketName
+  CloudTrailS3Policy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Sub '${AuditLogBucket}'
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !Sub '${AuditLogBucket.Arn}'
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${AuditLogBucket.Arn}/*AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+  S3ObjectLevelCloudTrail:
+    Type: 'AWS::CloudTrail::Trail'
+    DependsOn:
+      - CloudTrailS3Policy
+    Properties:
+      IsLogging: true
+      IsMultiRegionTrail: true
+      IncludeGlobalServiceEvents: true
+      S3BucketName: !Sub '${AuditLogBucket}'
+      EventSelectors:
+        - DataResources:
+            - Type: 'AWS::S3::Object'
+              Values:
+                - !Sub '${RawZoneBucket.Arn}/'
+                - !Sub '${ConformedZoneBucket.Arn}/'
+                - !Sub '${PurposeZoneBucket.Arn}/'
+          IncludeManagementEvents: true
+          ReadWriteType: WriteOnly
+Outputs:
+  RawZoneBucket:
+    Description: Raw Zone Bucket
+    Value: !Ref RawZoneBucket
+    Export:
+      Name: !Sub '${ParentStackName}-RawZoneBucket'
+  ConformedZoneBucket:
+    Description: Conformed Zone Bucket
+    Value: !Ref ConformedZoneBucket
+    Export:
+      Name: !Sub '${ParentStackName}-ConformedZoneBucket'
+  PurposeZoneBucket:
+    Description: Purpose Zone Bucket
+    Value: !Ref PurposeZoneBucket
+    Export:
+      Name: !Sub '${ParentStackName}-PurposeZoneBucket'
+  AuditLogBucket:
+    Description: Cloud Trail Bucket
+    Value: !Ref AuditLogBucket
+    Export:
+      Name: !Sub '${ParentStackName}-AuditLogBucket'

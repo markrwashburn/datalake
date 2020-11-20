@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: 'AWS::SecretsManager-2020-07-23'
+Parameters:
+  ParentStackName:
+    Type: String
+  DatabaseName:
+    Description: Name of the database
+    Type: String
+    Default: DataLake
+  BackupRetentionPeriod:
+    Description: The number of days to keep snapshots of the cluster.
+    Type: Number
+    MinValue: 1
+    MaxValue: 35
+    Default: 35
+  Subnet1:
+    Description: Subnet 1 ID
+    Type: 'AWS::EC2::Subnet::Id'
+  Subnet1AZ:
+    Type: 'AWS::EC2::AvailabilityZone::Name'
+    Default: us-east-1a
+  Subnet2:
+    Description: Subnet 2 ID
+    Type: 'AWS::EC2::Subnet::Id'
+  Subnet2AZ:
+    Type: 'AWS::EC2::AvailabilityZone::Name'
+    Default: us-east-1b
+  AutoPause:
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+  MinCapacity:
+    Type: String
+    AllowedValues:
+      - 2
+      - 4
+      - 8
+      - 16
+      - 32
+      - 64
+      - 192
+      - 384
+    Default: 2
+  MaxCapacity:
+    Type: String
+    AllowedValues:
+      - 2
+      - 4
+      - 8
+      - 16
+      - 32
+      - 64
+      - 192
+      - 384
+    Default: 2
+  SecondsUntilAutoPause:
+    Type: Number
+    MinValue: 1
+    MaxValue: 86400
+    Default: 300
+Resources:
+  DBSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: Aurora Subnet Group
+      SubnetIds:
+        - !Ref Subnet1
+        - !Ref Subnet2
+  RDSDBClusterParameterGroup:
+    Type: 'AWS::RDS::DBClusterParameterGroup'
+    Properties:
+      Description: Aurora Cluster Parameter Group
+      Family: aurora-postgresql10
+      Parameters:
+        client_encoding: UTF8
+  RDSSecret:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: /db/config
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "dbadmin"}'
+        GenerateStringKey: password
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+  RDSCluster:
+    Type: 'AWS::RDS::DBCluster'
+    Properties:
+      DBClusterParameterGroupName: !Ref RDSDBClusterParameterGroup
+      MasterUsername: !Join
+        - ''
+        - - '{{resolve:secretsmanager:'
+          - !Ref RDSSecret
+          - ':SecretString:username}}'
+      MasterUserPassword: !Join
+        - ''
+        - - '{{resolve:secretsmanager:'
+          - !Ref RDSSecret
+          - ':SecretString:password}}'
+      DatabaseName: !Ref DatabaseName
+      BackupRetentionPeriod: !Ref BackupRetentionPeriod
+      Engine: aurora-postgresql
+      EngineMode: serverless
+      ScalingConfiguration:
+        AutoPause: !Ref AutoPause
+        MinCapacity: !Ref MinCapacity
+        MaxCapacity: !Ref MaxCapacity
+        SecondsUntilAutoPause: !Ref SecondsUntilAutoPause
+      AvailabilityZones:
+        - !Ref Subnet1AZ
+        - !Ref Subnet2AZ
+      DBSubnetGroupName: !Ref DBSubnetGroup
+  RDSSecretTargetAttachment:
+    Type: 'AWS::SecretsManager::SecretTargetAttachment'
+    Properties:
+      SecretId: !Ref RDSSecret
+      TargetId: !Ref RDSCluster
+      TargetType: 'AWS::RDS::DBCluster'
+  RDSSecretRotationSchedule:
+    Type: 'AWS::SecretsManager::RotationSchedule'
+    DependsOn: RDSSecretTargetAttachment
+    Properties:
+      SecretId: !Ref RDSSecret
+      HostedRotationLambda:
+        RotationLambdaName: SecretsManagerRotation
+        RotationType: PostgreSQLSingleUser
+      RotationRules:
+        AutomaticallyAfterDays: 7
+Outputs:
+  DNSName:
+    Description: The connection endpoint for the RDS Cluster.
+    Value: !GetAtt RDSCluster.Endpoint.Address
+    Export:
+      Name: !Sub '${ParentStackName}-DNSName'
+  DNSPort:
+    Description: The connection port for the RDS Cluster.
+    Value: !GetAtt RDSCluster.Endpoint.Port
+    Export:
+      Name: !Sub '${ParentStackName}-DNSPort'

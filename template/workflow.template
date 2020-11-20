@@ -1,0 +1,246 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  ParentStackName:
+    Type: String
+    Default: WorkFlowStack
+  StateMachineName:
+    Type: String
+    Default: DataLakeStateMachine
+Resources:
+  StateExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - !Sub 'states.${AWS::Region}.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'lambda:ListFunctions'
+                  - 'lambda:InvokeFunction'
+                Resource: !GetAtt
+                  - LambdaFunction
+                  - Arn
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogDelivery'
+                  - 'logs:CreateLogDelivery'
+                  - 'logs:PutResourcePolicy'
+                  - 'logs:DescribeLogGroups'
+                  - 'logs:DeleteLogGroup'
+                  - 'logs:UpdateLogDelivery'
+                  - 'logs:DeleteLogDelivery'
+                  - 'logs:DescribeResourcePolicies'
+                  - 'logs:GetLogDelivery'
+                  - 'logs:ListLogDeliveries'
+                Resource: '*'
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                Resource:
+                  - !Join
+                    - ''
+                    - - 'arn:aws:s3:::'
+                      - !ImportValue
+                        'Fn::Join':
+                          - ''
+                          - - !Ref ParentStackName
+                            - '-RawZoneBucket'
+                  - !Join
+                    - ''
+                    - - 'arn:aws:s3:::'
+                      - !ImportValue
+                        'Fn::Join':
+                          - ''
+                          - - !Ref ParentStackName
+                            - '-RawZoneBucket'
+                      - /*
+                  - !Join
+                    - ''
+                    - - 'arn:aws:s3:::'
+                      - !ImportValue
+                        'Fn::Join':
+                          - ''
+                          - - !Ref ParentStackName
+                            - '-ConformedZoneBucket'
+                  - !Join
+                    - ''
+                    - - 'arn:aws:s3:::'
+                      - !ImportValue
+                        'Fn::Join':
+                          - ''
+                          - - !Ref ParentStackName
+                            - '-ConformedZoneBucket'
+                      - /*
+                  - !Join
+                    - ''
+                    - - 'arn:aws:s3:::'
+                      - !ImportValue
+                        'Fn::Join':
+                          - ''
+                          - - !Ref ParentStackName
+                            - '-PurposeZoneBucket'
+                  - !Join
+                    - ''
+                    - - 'arn:aws:s3:::'
+                      - !ImportValue
+                        'Fn::Join':
+                          - ''
+                          - - !Ref ParentStackName
+                            - '-PurposeZoneBucket'
+                      - /*
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 'arn:aws:logs:*:*:*'
+  EventRuleExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - events.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'states:StartExecution'
+                Resource: !GetAtt
+                  - StateMachine
+                  - Arn
+  StateMachine:
+    Type: 'AWS::StepFunctions::StateMachine'
+    Properties:
+      StateMachineName: !Ref StateMachineName
+      LoggingConfiguration:
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt
+                - EventBridgeLogGroup
+                - Arn
+        IncludeExecutionData: true
+        Level: ALL
+      DefinitionString: !Sub
+        - |-
+          {
+            "StartAt": "S3DataEvent",
+            "States": {
+              "S3DataEvent": {
+                "Type": "Task",
+                "Resource": "${lambdaArn}",
+                "End": true
+              }
+            }
+          }
+        - lambdaArn: !GetAtt
+            - LambdaFunction
+            - Arn
+      RoleArn: !GetAtt
+        - StateExecutionRole
+        - Arn
+  LambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt
+        - LambdaExecutionRole
+        - Arn
+      Runtime: python3.7
+      Timeout: 30
+      Code:
+        ZipFile: |
+          import logging
+
+          LOGGER = logging.getLogger(__name__)
+          LOGGER.setLevel(logging.INFO)
+
+          def handler(event, context):
+              LOGGER.info('Event: %s', event)
+  EventRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventSource:
+            - s3.amazonaws.com
+          eventName:
+            - PutObject
+          requestParameters:
+            bucketName:
+              - !Join
+                - ''
+                - - !ImportValue
+                    'Fn::Join':
+                      - ''
+                      - - !Ref ParentStackName
+                        - '-RawZoneBucket'
+              - !Join
+                - ''
+                - - !ImportValue
+                    'Fn::Join':
+                      - ''
+                      - - !Ref ParentStackName
+                        - '-ConformedZoneBucket'
+              - !Join
+                - ''
+                - - !ImportValue
+                    'Fn::Join':
+                      - ''
+                      - - !Ref ParentStackName
+                        - '-PurposeZoneBucket'
+      Targets:
+        - Id: !Sub DataLakeStateMachine
+          Arn: !GetAtt
+            - StateMachine
+            - Arn
+          RoleArn: !GetAtt
+            - EventRuleExecutionRole
+            - Arn
+  EventBridgeLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Sub /datalake
+      RetentionInDays: 7
