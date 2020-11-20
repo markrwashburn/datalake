@@ -1,7 +1,7 @@
 # datalake
 
 pre-setup:
-1. create repository for cloudformation templates.
+1. create repository bucket for cloudformation templates.
 
 setup:
 1. bin/cf-package.sh # this will package / upload cloudformation templates.
