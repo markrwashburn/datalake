@@ -1,4 +1,4 @@
-# datalake
+# datalakea
 
 pre-setup:
 1. create repository bucket for cloudformation templates.
